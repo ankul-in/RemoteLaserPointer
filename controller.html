@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>🔴 Laser Pointer Controller</title>
+<style>
+  /* ── Reset & base ────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #0a0a1a;
+    color: #e0e0e0;
+    display: flex; flex-direction: column;
+  }
+
+  /* ── Connection screen ───────────────────────────────────────── */
+  #connect-screen {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; flex: 1; gap: 6px;
+  }
+  #connect-screen h1 {
+    font-size: 2rem; color: #e94560; margin-bottom: 2px;
+  }
+  #connect-screen .subtitle {
+    color: #666; font-size: 0.85rem; margin-bottom: 18px;
+  }
+  #connect-form {
+    background: #12122a; border-radius: 14px; padding: 28px 34px;
+    display: flex; flex-direction: column; gap: 10px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.5);
+    min-width: 340px;
+  }
+  #connect-form label {
+    font-size: 0.78rem; color: #888; text-transform: uppercase;
+    letter-spacing: .6px; margin-top: 4px;
+  }
+  #connect-form input {
+    background: #1a1a3e; border: 1px solid #2a2a5e; border-radius: 8px;
+    padding: 10px 14px; color: #fff; font-size: 0.95rem;
+    outline: none; transition: border .2s;
+  }
+  #connect-form input:focus { border-color: #e94560; }
+  #connect-form button {
+    margin-top: 12px; padding: 12px; border: none; border-radius: 10px;
+    background: #e94560; color: #fff; font-size: 1rem; font-weight: 700;
+    cursor: pointer; transition: background .2s;
+  }
+  #connect-form button:hover { background: #d13350; }
+
+  /* ── Pointer screen ──────────────────────────────────────────── */
+  #pointer-screen { display: none; flex-direction: column; flex: 1; }
+
+  /* toolbar */
+  #toolbar {
+    display: flex; align-items: center; gap: 16px;
+    padding: 8px 18px; background: #0f0f23; border-bottom: 1px solid #1a1a3e;
+    flex-shrink: 0;
+  }
+  #toolbar .status { display: flex; align-items: center; gap: 6px; font-size: .85rem; }
+  #toolbar .dot {
+    width: 8px; height: 8px; border-radius: 50%; background: #33ff55;
+    box-shadow: 0 0 6px #33ff55;
+  }
+  #toolbar .room-label { color: #888; font-size: .82rem; }
+  #toolbar .spacer { flex: 1; }
+  #toolbar .user-count {
+    background: #1a1a3e; padding: 4px 12px; border-radius: 20px;
+    font-size: .8rem; color: #aaa;
+  }
+  #disconnect-btn {
+    background: transparent; border: 1px solid #444; border-radius: 8px;
+    color: #aaa; padding: 5px 14px; font-size: .8rem; cursor: pointer;
+    transition: all .2s;
+  }
+  #disconnect-btn:hover { border-color: #e94560; color: #e94560; }
+
+  /* canvas area */
+  #canvas-wrap {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    padding: 16px; position: relative; overflow: hidden;
+  }
+  #canvas-container {
+    position: relative; background: #111128; border-radius: 12px;
+    overflow: hidden; box-shadow: 0 0 0 1px #222, 0 4px 20px rgba(0,0,0,.6);
+    cursor: crosshair; touch-action: none;
+  }
+  #pointer-canvas { display: block; }
+
+  /* instructions */
+  #instructions {
+    position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: rgba(15,15,35,.85); padding: 8px 20px; border-radius: 20px;
+    font-size: .78rem; color: #666; pointer-events: none;
+    backdrop-filter: blur(6px);
+  }
+  #instructions kbd {
+    background: #1a1a3e; padding: 2px 6px; border-radius: 4px;
+    font-family: inherit; color: #aaa;
+  }
+
+  /* hidden helper */
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════  CONNECTION SCREEN  ══════════════════════ -->
+<div id="connect-screen">
+  <h1>🔴 Remote Laser Pointer</h1>
+  <div class="subtitle">Controller — click on the canvas to point at the remote screen</div>
+
+  <form id="connect-form" autocomplete="off">
+    <label for="inp-server">Server</label>
+    <input id="inp-server" value="localhost:8765" spellcheck="false" />
+
+    <label for="inp-room">Room</label>
+    <input id="inp-room" value="room1" spellcheck="false" />
+
+    <label for="inp-name">Your Name</label>
+    <input id="inp-name" spellcheck="false" />
+
+    <button type="submit">Connect</button>
+  </form>
+</div>
+
+<!-- ════════════════════  POINTER SCREEN  ════════════════════════ -->
+<div id="pointer-screen">
+  <div id="toolbar">
+    <div class="status"><span class="dot"></span> Connected</div>
+    <div class="room-label" id="room-label">room1</div>
+    <div class="spacer"></div>
+    <div class="user-count" id="user-count">—</div>
+    <button id="disconnect-btn">Disconnect</button>
+  </div>
+
+  <div id="canvas-wrap">
+    <div id="canvas-container">
+      <canvas id="pointer-canvas"></canvas>
+    </div>
+    <div id="instructions">
+      <kbd>Click &amp; drag</kbd> to point &nbsp;·&nbsp;
+      <kbd>Space</kbd> toggle lock &nbsp;·&nbsp;
+      <kbd>Esc</kbd> disconnect
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//  Laser Pointer Controller
+// ═══════════════════════════════════════════════════════════════════
+
+const COLORS = ['#FF3333','#33CCFF','#33FF33','#FF33FF','#FFAA00','#AA33FF'];
+
+class Controller {
+  constructor() {
+    this.ws        = null;
+    this.userId    = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2,10);
+    this.userId    = this.userId.slice(0, 8);
+    this.color     = COLORS[Math.floor(Math.random() * COLORS.length)];
+    this.name      = '';
+    this.room      = '';
+    this.pointing  = false;
+    this.locked    = false;       // space-bar toggle
+    this.lastX     = 0;
+    this.lastY     = 0;
+    this.hoverX    = -1;
+    this.hoverY    = -1;
+
+    this._grabDOM();
+    this._events();
+    this._setDefaultName();
+    this._resizeCanvas();
+
+    // render loop
+    requestAnimationFrame(() => this._draw());
+  }
+
+  /* ── DOM refs ──────────────────────────────────────────────── */
+  _grabDOM() {
+    this.$connect = document.getElementById('connect-screen');
+    this.$pointer = document.getElementById('pointer-screen');
+    this.$form    = document.getElementById('connect-form');
+    this.$server  = document.getElementById('inp-server');
+    this.$room    = document.getElementById('inp-room');
+    this.$name    = document.getElementById('inp-name');
+    this.$canvas  = document.getElementById('pointer-canvas');
+    this.$wrap    = document.getElementById('canvas-container');
+    this.$cWrap   = document.getElementById('canvas-wrap');
+    this.$roomLbl = document.getElementById('room-label');
+    this.$count   = document.getElementById('user-count');
+    this.$disc    = document.getElementById('disconnect-btn');
+    this.ctx      = this.$canvas.getContext('2d');
+  }
+
+  _setDefaultName() {
+    this.$name.value = 'Helper-' + this.userId.slice(0, 4);
+  }
+
+  /* ── events ────────────────────────────────────────────────── */
+  _events() {
+    // connect form
+    this.$form.addEventListener('submit', e => { e.preventDefault(); this._connect(); });
+
+    // disconnect
+    this.$disc.addEventListener('click', () => this._disconnect());
+
+    // resize
+    window.addEventListener('resize', () => this._resizeCanvas());
+
+    // canvas — mouse
+    this.$canvas.addEventListener('mousedown',  e => this._onDown(e));
+    this.$canvas.addEventListener('mousemove',  e => this._onMove(e));
+    this.$canvas.addEventListener('mouseup',    e => this._onUp(e));
+    this.$canvas.addEventListener('mouseleave', e => this._onLeave(e));
+
+    // canvas — touch
+    this.$canvas.addEventListener('touchstart', e => { e.preventDefault(); this._onDown(e.touches[0]); }, {passive:false});
+    this.$canvas.addEventListener('touchmove',  e => { e.preventDefault(); this._onMove(e.touches[0]); }, {passive:false});
+    this.$canvas.addEventListener('touchend',   e => { e.preventDefault(); this._onUp(e); }, {passive:false});
+
+    // keyboard
+    document.addEventListener('keydown', e => {
+      if (e.code === 'Space' && this.ws) { e.preventDefault(); this._toggleLock(); }
+      if (e.code === 'Escape' && this.ws) { this._disconnect(); }
+    });
+
+    // auto-detect server from page origin
+    if (location.hostname) {
+      this.$server.value = location.hostname + ':8765';
+    }
+  }
+
+  /* ── canvas sizing (16:9, fit container) ───────────────────── */
+  _resizeCanvas() {
+    const wrap = this.$cWrap;
+    if (!wrap) return;
+    const pad  = 32;
+    const maxW = wrap.clientWidth  - pad;
+    const maxH = wrap.clientHeight - pad;
+    const asp  = 16 / 9;
+
+    let cw = maxW;
+    let ch = cw / asp;
+    if (ch > maxH) { ch = maxH; cw = ch * asp; }
+
+    cw = Math.floor(cw);
+    ch = Math.floor(ch);
+
+    this.$canvas.width  = cw;
+    this.$canvas.height = ch;
+    this.$wrap.style.width  = cw + 'px';
+    this.$wrap.style.height = ch + 'px';
+  }
+
+  /* ── connection ────────────────────────────────────────────── */
+  _connect() {
+    const server = this.$server.value.trim();
+    this.room    = this.$room.value.trim() || 'default';
+    this.name    = this.$name.value.trim() || 'Helper';
+
+    try {
+      this.ws = new WebSocket('ws://' + server);
+    } catch (err) {
+      alert('Invalid server address');
+      return;
+    }
+
+    this.ws.onopen = () => {
+      this.ws.send(JSON.stringify({
+        type: 'join', room: this.room,
+        user_id: this.userId, name: this.name,
+      }));
+      this.$connect.classList.add('hidden');
+      this.$pointer.style.display = 'flex';
+      this.$roomLbl.textContent = this.room;
+      setTimeout(() => this._resizeCanvas(), 50);
+    };
+
+    this.ws.onmessage = (ev) => {
+      try {
+        const d = JSON.parse(ev.data);
+        if (d.type === 'system') {
+          this.$count.textContent = (d.count || '—') + ' online';
+        }
+      } catch {}
+    };
+
+    this.ws.onclose = () => this._onDisconnect();
+    this.ws.onerror = () => this._onDisconnect();
+  }
+
+  _disconnect() {
+    this.pointing = false;
+    this.locked   = false;
+    if (this.ws) { this.ws.close(); this.ws = null; }
+    this._onDisconnect();
+  }
+
+  _onDisconnect() {
+    this.ws = null;
+    this.$pointer.style.display = 'none';
+    this.$connect.classList.remove('hidden');
+  }
+
+  /* ── pointer interaction ───────────────────────────────────── */
+  _coords(e) {
+    const r = this.$canvas.getBoundingClientRect();
+    return {
+      x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)),
+      y: Math.max(0, Math.min(1, (e.clientY - r.top)  / r.height)),
+    };
+  }
+
+  _onDown(e) {
+    if (this.locked) return;       // locked mode ignores press
+    this.pointing = true;
+    const c = this._coords(e);
+    this.lastX = c.x; this.lastY = c.y;
+    this._sendPointer(c.x, c.y, true);
+  }
+
+  _onMove(e) {
+    const c = this._coords(e);
+    this.hoverX = c.x; this.hoverY = c.y;
+    if (this.pointing || this.locked) {
+      this.lastX = c.x; this.lastY = c.y;
+      this._sendPointer(c.x, c.y, true);
+    }
+  }
+
+  _onUp(_) {
+    if (this.locked) return;
+    this.pointing = false;
+    this._sendPointer(this.lastX, this.lastY, false);
+  }
+
+  _onLeave(_) {
+    this.hoverX = -1; this.hoverY = -1;
+    if (!this.locked) {
+      this.pointing = false;
+      this._sendPointer(this.lastX, this.lastY, false);
+    }
+  }
+
+  _toggleLock() {
+    this.locked = !this.locked;
+    if (this.locked) {
+      this.pointing = true;
+      if (this.hoverX >= 0) this._sendPointer(this.hoverX, this.hoverY, true);
+    } else {
+      this.pointing = false;
+      this._sendPointer(this.lastX, this.lastY, false);
+    }
+  }
+
+  _sendPointer(x, y, visible) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    this.ws.send(JSON.stringify({
+      type: 'pointer', user_id: this.userId,
+      name: this.name, x, y, visible,
+      color: this.color,
+    }));
+  }
+
+  /* ── draw loop ─────────────────────────────────────────────── */
+  _draw() {
+    requestAnimationFrame(() => this._draw());
+    const ctx = this.ctx;
+    const W   = this.$canvas.width;
+    const H   = this.$canvas.height;
+    if (!W) return;
+
+    ctx.clearRect(0, 0, W, H);
+
+    // dark fill
+    ctx.fillStyle = '#111128';
+    ctx.fillRect(0, 0, W, H);
+
+    // grid
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth   = 1;
+    const step = Math.max(20, Math.round(W / 40));
+    for (let x = step; x < W; x += step) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    }
+    for (let y = step; y < H; y += step) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    }
+
+    // crosshair at center (faint)
+    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.beginPath(); ctx.moveTo(W/2, 0); ctx.lineTo(W/2, H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, H/2); ctx.lineTo(W, H/2); ctx.stroke();
+    ctx.setLineDash([]);
+
+    const t = performance.now() / 1000;
+
+    // ── hover preview (dim dot) ──
+    if (this.hoverX >= 0 && !this.pointing && !this.locked) {
+      const px = this.hoverX * W;
+      const py = this.hoverY * H;
+      ctx.globalAlpha = 0.25;
+      ctx.beginPath();
+      ctx.arc(px, py, 6, 0, Math.PI * 2);
+      ctx.fillStyle = this.color;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // ── active pointer (bright animated dot) ──
+    if (this.pointing || this.locked) {
+      const px = this.lastX * W;
+      const py = this.lastY * H;
+      const pulse = 1 + 0.25 * Math.sin(t * 8);
+
+      // outer glow
+      const grad = ctx.createRadialGradient(px, py, 0, px, py, 28 * pulse);
+      grad.addColorStop(0, this.color + '66');
+      grad.addColorStop(1, this.color + '00');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(px, py, 28 * pulse, 0, Math.PI * 2);
+      ctx.fill();
+
+      // mid ring
+      ctx.beginPath();
+      ctx.arc(px, py, 10, 0, Math.PI * 2);
+      ctx.fillStyle = this.color;
+      ctx.globalAlpha = 0.6;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // core
+      ctx.beginPath();
+      ctx.arc(px, py, 5, 0, Math.PI * 2);
+      ctx.fillStyle = this.color;
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // centre
+      ctx.beginPath();
+      ctx.arc(px, py, 2, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff';
+      ctx.fill();
+
+      // crosshairs
+      ctx.strokeStyle = this.color + '55';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, H); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(W, py); ctx.stroke();
+      ctx.setLineDash([]);
+
+      // coordinate label
+      ctx.fillStyle = this.color;
+      ctx.font = '11px "Segoe UI", sans-serif';
+      const lbl = `${Math.round(this.lastX*100)}%, ${Math.round(this.lastY*100)}%`;
+      ctx.fillText(lbl, px + 14, py - 14);
+
+      // "LOCKED" badge
+      if (this.locked) {
+        ctx.fillStyle = 'rgba(233,69,96,0.85)';
+        const bw = 62, bh = 20, bx = px - bw/2, by = py + 18;
+        ctx.beginPath();
+        ctx.roundRect(bx, by, bw, bh, 4);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 10px "Segoe UI", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('LOCKED', px, by + 14);
+        ctx.textAlign = 'start';
+      }
+    }
+  }
+}
+
+// boot
+document.addEventListener('DOMContentLoaded', () => new Controller());
+</script>
+</body>
+</html>
+
